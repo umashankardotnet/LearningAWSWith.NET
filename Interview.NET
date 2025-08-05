@@ -1,1 +1,256 @@
-ABC
+# .NET Technical Interview Questions
+
+## 1. .NET Experience and Migration
+
+- **Which .NET versions have you worked with?**
+- **Have you worked on .NET legacy to .NET Core migrations?**
+  - What tools did you use?
+  - What challenges did you face?
+  - Did you use any AI tools for porting?
+
+- **Why does Microsoft have .NET Standard framework?**
+  - .NET Standard vs .NET Core
+
+- **How can you support an application on multiple platforms with different code?**
+
+## 2. Dependency Injection
+
+- **How would you implement dependency injection in .NET and .NET 8?**
+
+- **Lifetime Mismatches:**
+  - Injecting a scoped or transient service into a singleton can cause issues like capturing a scoped service (e.g., DbContext) beyond its intended lifetime, leading to concurrency issues or memory leaks.
+  - Example: A singleton service holding a scoped DbContext may reuse the same context across requests, causing data corruption.
+  - Mitigation: Use factory patterns (IServiceProvider or Func<T>) to resolve services dynamically or validate lifetimes during service registration with tools like AddSingletonWithScopedDependencyCheck.
+
+- **How do you handle dependency injection in a multi-tenant ASP.NET Core application?**
+  ```csharp
+  services.AddScoped<ITenantContext, TenantContext>();
+  services.AddScoped(sp => {
+      var tenantContext = sp.GetRequiredService<ITenantContext>();
+      return tenantContext.TenantId == "TenantA"
+          ? new TenantAService()
+          : new TenantBService();
+  });
+  ```
+
+## 3. Entity Framework
+
+- **Do you have experience with Entity Framework?**
+  - Database first vs Code first
+  - Have you done any migrations?
+
+- **Performance considerations for EF Core:**
+  - AsNoTracking for read-only queries
+  - Eager loading (Include)
+  - Use BulkInsertAsync
+  - Implement Pagination
+
+- **Loading strategies from fastest to slowest:**
+  1. Eager Loading (fastest)
+     - Uses .Include() and .ThenInclude()
+     - Loads all related data in a single SQL query
+     - Best for known data requirements
+     - Prevents N+1 query problem
+  2. Explicit Loading
+     - Uses .Reference(x => x.Property).Load() or .Collection(x => x.Properties).Load()
+     - Loads related data on demand with explicit control
+     - Generates separate queries but only when specifically requested
+  3. Lazy Loading (slowest)
+     - Requires virtual navigation properties
+     - Generates a separate query for each navigation property access
+     - Can lead to the N+1 query problem
+     - Often results in poor performance in loops
+
+- **How to handle concurrency conflicts in EF Core?**
+  - Concurrency Token
+  - Handle Exceptions: Catch DbUpdateConcurrencyException and retry
+  - Use Client-Wins or Database-Wins Strategy
+
+## 4. Background Processing and Thread Safety
+
+- **A system needs to process incoming messages using multiple background tasks and save them to a database with EF Core, while ensuring both thread safety and the ability to handle increased workloads. How would you prevent data conflicts while maintaining efficient processing speed?**
+  - Implement a message queue system with multiple consumers, each using its own scoped DbContext. Use optimistic concurrency in EF Core to handle conflicts. Scale horizontally with multiple worker instances, and vertically by configuring thread pool settings. Add retry policies for resilience.
+
+- **Approach to manage database connections in a containerized .NET application using EF Core, especially in a high-traffic production environment?**
+  - Connection pooling
+  - Use IDbContextFactory
+  - How connection pooling works?
+
+## 5. Docker
+
+- **What are Multi-Stage Dockerfiles and their benefits?**
+- **Use of docker-compose to spin up services like SQL Server or Redis alongside the .NET app**
+- **How can you optimize a Docker file?**
+
+## 6. Caching
+
+- **What are different types of caching available in .NET and when should you use them?**
+  - Caching strategies, like in-memory caching, output caching, or distributed caching, can significantly improve performance by reducing the need to repeatedly fetch or compute data.
+
+## 7. SQL Server
+
+## 8. Web API
+
+- **What happens when you type https://google.com in your browser? Explain with focus on headers.**
+  1. DNS lookup occurs
+  2. TCP connection established
+  3. TLS handshake happens
+  4. Browser sends request headers:
+     ```http
+     GET / HTTP/1.1
+     Host: google.com
+     User-Agent: Mozilla/5.0...
+     Accept: text/html,application/xhtml+xml...
+     Accept-Language: en-US,en;q=0.9
+     ```
+  5. Server responds with headers:
+     ```http
+     HTTP/1.1 200 OK
+     Content-Type: text/html; charset=UTF-8
+     Cache-Control: private, max-age=0
+     Content-Security-Policy: frame-ancestors 'self'
+     ```
+
+- **How would you implement secure cookie handling for a banking application?**
+  ```javascript
+  app.use((req, res, next) => {
+    res.cookie('sessionId', 'value', {
+      httpOnly: true,        // Prevent XSS
+      secure: true,         // HTTPS only
+      sameSite: 'strict',   // Prevent CSRF
+      maxAge: 3600000,      // 1 hour
+      domain: '.bank.com',  // Specific domain
+      path: '/',           // Cookie path
+    });
+    next();
+  });
+  ```
+
+- **What are cache-control headers?**
+
+## 9. Sticky Sessions
+
+- **Where are sticky sessions managed?**
+  1. Load Balancer Level (Most Common)
+     - AWS Elastic Load Balancer (ELB)
+     - Nginx Load Balancer
+     - HAProxy
+     - F5 Load Balancer
+  2. Application Level
+     - Application servers like Apache Tomcat
+     - IIS (Internet Information Services)
+     - WebLogic
+     - WebSphere
+
+- **Best practices:**
+  - Use load balancer-level sticky sessions when possible
+  - Implement proper session replication for failover
+  - Consider using distributed caching (Redis/Memcached) instead of sticky sessions
+  - Monitor session distribution across servers
+
+## 10. Proxy vs Reverse Proxy
+
+**Proxy Server**
+- Direction: Client → Proxy → Server
+- Primary purpose: Represents the client to the server
+- Common uses:
+  - Anonymizing client identity
+  - Caching content to improve performance
+  - Filtering content (e.g., corporate web filters)
+  - Bypassing geo-restrictions
+  - Load balancing client requests
+
+**Reverse Proxy**
+- Direction: Client → Reverse Proxy → Server
+- Primary purpose: Represents the server to the client
+- Common uses:
+  - Load balancing across multiple backend servers
+  - SSL termination (handling HTTPS encryption/decryption)
+  - Caching static content to reduce server load
+  - Security (hiding backend server details)
+  - Compression to optimize bandwidth
+
+## 11. Code Issues
+
+**Issue 1:**
+```csharp
+public async void ProcessFiles(string[] filePaths)
+{
+    foreach (var path in filePaths)
+    {
+        var fileContent = File.ReadAllText(path);
+        await ProcessContentAsync(fileContent);
+    }
+    
+    Console.WriteLine("All files processed");
+}
+
+private async Task ProcessContentAsync(string content)
+{
+    await Task.Delay(100);
+    // Process content
+}
+```
+
+Issues:
+- async void method: Using async void instead of async Task is problematic because:
+  - Exceptions in async void methods can crash the application
+  - Caller cannot await the completion of the method
+  - Cannot be properly unit tested
+- Synchronous file I/O: Using File.ReadAllText() blocks the thread instead of using asynchronous alternatives.
+- Sequential processing: Files are processed one after another instead of in parallel.
+
+**Issue 2: Async/Await issue:**
+```csharp
+public class DataService
+{
+    public string GetData()
+    {
+        var task = GetDataAsync();
+        return task.Result; // This line can cause deadlocks
+    }
+    
+    private async Task<string> GetDataAsync()
+    {
+        using (var client = new HttpClient())
+        {
+            var response = await client.GetAsync("https://api.example.com/data");
+            return await response.Content.ReadAsStringAsync();
+        }
+    }
+}
+```
+
+**Issue 3:**
+```csharp
+public class UserController
+{
+    private readonly UserService _userService;
+    private readonly Logger _logger;
+    
+    public UserController()
+    {
+        _userService = new UserService(new UserRepository(new DatabaseContext()));
+        _logger = Logger.GetInstance();
+    }
+    
+    public IActionResult GetUser(int id)
+    {
+        try
+        {
+            var user = _userService.GetById(id);
+            return new OkObjectResult(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex.Message);
+            return new BadRequestObjectResult("Error retrieving user");
+        }
+    }
+}
+```
+
+Issues:
+1. Tight coupling: Creating dependencies directly inside the class.
+2. Singleton access through static method: Using static Logger.GetInstance() instead of DI.
+3. Difficult to test: Cannot easily mock dependencies for unit testing.
